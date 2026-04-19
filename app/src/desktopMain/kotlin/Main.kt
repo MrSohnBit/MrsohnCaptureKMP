@@ -54,13 +54,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
@@ -70,18 +76,20 @@ import kotlinx.coroutines.withContext
 import mrsohn.capture.adb.AdbRunner
 import mrsohn.capture.adb.DeviceInfo
 import mrsohn.capture.ui.theme.MrSohnCaptureTheme
+import java.awt.Toolkit
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.imageio.ImageIO
+import kotlin.system.exitProcess
 import org.jetbrains.skia.Image as SkiaImage
-
 
 fun main() = application {
     val settingsFile = File("window_settings.properties")
     val settings = WindowSettings(settingsFile)
     val savedState = settings.load()
-    
+
     val windowState = rememberWindowState(
         position = savedState.position,
         size = savedState.size
@@ -100,15 +108,17 @@ fun main() = application {
         title = "MrSohn Capture",
         state = windowState
     ) {
-        MrSohnCaptureApp()
+        MrSohnCaptureApp() {
+            exitApplication()
+        }
     }
 }
 
 @Composable
-fun MrSohnCaptureApp() {
+fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
     val adbRunner = remember { AdbRunner() }
     val scope = rememberCoroutineScope()
-    
+
     var devices by remember { mutableStateOf(listOf<DeviceInfo>()) }
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var currentImage by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -116,8 +126,10 @@ fun MrSohnCaptureApp() {
     var capturedImages by remember { mutableStateOf(listOf<File>()) }
     var isCapturing by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Ready") }
-
     var showFlash by remember { mutableStateOf(false) }
+
+    var currentIndex by remember { mutableStateOf(-1) }
+    val currentImageFile: File? = currentlyDisplayedFile.takeIf { it != null }
 
     val saveDir = remember {
         val picturesDir = File(System.getProperty("user.home"), "Pictures")
@@ -126,27 +138,90 @@ fun MrSohnCaptureApp() {
         dir
     }
 
-    // Load existing captures
-    LaunchedEffect(Unit) {
-        val files = saveDir.listFiles { _, name -> name.endsWith(".png") }
+    fun refreshCapturedImages() {
+        capturedImages = saveDir.listFiles { _, name -> name.endsWith(".png") }
             ?.sortedByDescending { it.lastModified() }
             ?: emptyList()
-        capturedImages = files
-    }
 
-    // Device discovery loop
-    LaunchedEffect(Unit) {
-        while(true) {
-            val foundDevices = withContext(Dispatchers.IO) { adbRunner.getDevices() }
-            devices = foundDevices
-            if (selectedDevice == null && devices.isNotEmpty()) {
-                selectedDevice = devices.first()
-            } else if (selectedDevice != null && !devices.any { it.id == selectedDevice?.id }) {
-                selectedDevice = if (devices.isNotEmpty()) devices.first() else null
-            }
-            delay(5000) 
+        if (currentlyDisplayedFile != null && !currentlyDisplayedFile!!.exists()) {
+            currentlyDisplayedFile = null
+            currentImage = null
+            statusMessage = "Selected file was removed"
         }
     }
+
+    fun showFile(file: File) {
+        scope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+                currentImage = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+                currentlyDisplayedFile = file
+                statusMessage = "Viewing: ${file.name}"
+            } catch (e: Exception) {
+                statusMessage = "Error loading image"
+            }
+        }
+    }
+
+    fun showAdjacentFile(direction: Int) {
+        val files = capturedImages
+        if (files.isEmpty()) return
+
+        currentIndex = currentlyDisplayedFile?.let { current ->
+            files.indexOfFirst { it.absolutePath == current.absolutePath }
+        } ?: -1
+
+        val nextIndex = when {
+            currentIndex == -1 && direction > 0 -> 0
+            currentIndex == -1 && direction < 0 -> files.lastIndex
+            else -> (currentIndex + direction).coerceIn(0, files.lastIndex)
+        }
+
+        showFile(files[nextIndex])
+    }
+
+    fun deleteFile() {
+        val files = capturedImages
+        currentIndex = currentlyDisplayedFile?.let { current ->
+            files.indexOfFirst { it.absolutePath == current.absolutePath }
+        } ?: -1
+        val file = files.getOrNull(currentIndex) ?: return
+        scope.launch {
+            try {
+                if (file.delete()) {
+                    refreshCapturedImages()
+                    statusMessage = "Deleted: ${file.name}"
+                    showAdjacentFile(if (currentIndex == files.lastIndex) -1 else 1)
+                } else {
+                    statusMessage = "Failed to delete ${file.name}"
+                }
+            } catch (e: Exception) {
+                statusMessage = "Error deleting file"
+            }
+        }
+    }
+
+    fun clipboardCopy() {
+        val files = capturedImages
+        currentIndex = currentlyDisplayedFile?.let { current ->
+            files.indexOfFirst { it.absolutePath == current.absolutePath }
+        } ?: -1
+        val file = files.getOrNull(currentIndex) ?: return
+
+        scope.launch {
+            try {
+                val image = withContext(Dispatchers.IO) { ImageIO.read(file) } ?: return@launch
+                val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+                clipboard.setContents(ImageSelection(image), null)
+                statusMessage = "Copied to clipboard: ${file.name}"
+            } catch (e: Exception) {
+                statusMessage = "Error copying to clipboard"
+            }
+        }
+    }
+
+
+
 
     // Extracted Capture Logic
     val performCapture = {
@@ -156,13 +231,13 @@ fun MrSohnCaptureApp() {
                 statusMessage = "Capturing ${selectedDevice?.model}..."
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 val file = File(saveDir, "capture_$timestamp.png")
-                
+
                 val success = withContext(Dispatchers.IO) {
                     adbRunner.captureScreen(selectedDevice?.id, file)
                 }
-                
+
                 if (success) {
-                    capturedImages = listOf(file) + (capturedImages.filter { it.absolutePath != file.absolutePath })
+                    refreshCapturedImages()
                     val bytes = withContext(Dispatchers.IO) { file.readBytes() }
                     currentImage = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
                     currentlyDisplayedFile = file
@@ -175,6 +250,90 @@ fun MrSohnCaptureApp() {
             }
         }
     }
+
+    fun handleShortcut(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+        if (event.type != KeyEventType.KeyDown) return false
+
+        return when {
+            event.key == Key.Spacebar -> {
+                performCapture()
+                true
+            }
+
+            event.key == Key.DirectionLeft -> {
+                showAdjacentFile(-1)
+                true
+            }
+
+            event.key == Key.DirectionRight -> {
+                showAdjacentFile(1)
+                true
+            }
+
+            event.key == Key.W && (event.isMetaPressed || event.isCtrlPressed) -> {
+                exitApplication()
+                true
+            }
+
+            event.key == Key.F4 && event.isAltPressed -> {
+                exitApplication()
+                true
+            }
+
+            event.key == Key.Delete -> {
+                deleteFile()
+                true
+            }
+
+            event.key == Key.C && (event.isMetaPressed || event.isCtrlPressed) -> {
+                clipboardCopy()
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    // Load existing captures
+    LaunchedEffect(Unit) {
+        refreshCapturedImages()
+    }
+
+    // Keep gallery in sync with filesystem changes
+    LaunchedEffect(Unit) {
+        var lastSnapshot = emptySet<String>()
+
+        while (true) {
+            val currentSnapshot = withContext(Dispatchers.IO) {
+                saveDir.listFiles { _, name -> name.endsWith(".png") }
+                    ?.map { "${it.name}:${it.lastModified()}:${it.length()}" }
+                    ?.toSet()
+                    ?: emptySet()
+            }
+
+            if (currentSnapshot != lastSnapshot) {
+                lastSnapshot = currentSnapshot
+                refreshCapturedImages()
+            }
+
+            delay(1000)
+        }
+    }
+
+    // Device discovery loop
+    LaunchedEffect(Unit) {
+        while(true) {
+            val foundDevices = withContext(Dispatchers.IO) { adbRunner.getDevices() }
+            devices = foundDevices
+            if (selectedDevice == null && devices.isNotEmpty()) {
+                selectedDevice = devices.first()
+            } else if (selectedDevice != null && !devices.any { it.id == selectedDevice?.id }) {
+                selectedDevice = if (devices.isNotEmpty()) devices.first() else null
+            }
+            delay(5000)
+        }
+    }
+
 
     val onEdit = {
         currentlyDisplayedFile?.let { file ->
@@ -209,6 +368,7 @@ fun MrSohnCaptureApp() {
                             )
                         )
                     )
+                    .onPreviewKeyEvent { handleShortcut(it) }
             ) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     Sidebar(
@@ -256,8 +416,8 @@ fun MrSohnCaptureApp() {
                             } else {
                                 EmptyPreview(selectedDevice != null)
                             }
-                            
-                            FocusBrackets(modifier = Modifier.size(120.dp))
+
+//                            FocusBrackets(modifier = Modifier.size(120.dp))
 
                             if (showFlash) {
                                 Box(
@@ -285,18 +445,10 @@ fun MrSohnCaptureApp() {
 
                         // Bottom Area: Recent Captures Only
                         BottomControls(
+                            currentImageFile = currentImageFile,
                             capturedImages = capturedImages,
                             onThumbnailClick = { file ->
-                                scope.launch {
-                                    try {
-                                        val bytes = withContext(Dispatchers.IO) { file.readBytes() }
-                                        currentImage = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
-                                        currentlyDisplayedFile = file
-                                        statusMessage = "Viewing: ${file.name}"
-                                    } catch (e: Exception) {
-                                        statusMessage = "Error loading image"
-                                    }
-                                }
+                                showFile(file)
                             }
                         )
                     }
@@ -494,8 +646,9 @@ fun EmptyPreview(hasDevice: Boolean) {
 
 @Composable
 fun BottomControls(
+    currentImageFile: File?,
     capturedImages: List<File>,
-    onThumbnailClick: (File) -> Unit
+    onThumbnailClick: (File) -> Unit,
 ) {
     Box(
         modifier = Modifier.fillMaxWidth().height(100.dp),
@@ -507,7 +660,7 @@ fun BottomControls(
             horizontalArrangement = Arrangement.Center
         ) {
             items(capturedImages.take(10)) { file ->
-                ThumbnailItem(file, onThumbnailClick)
+                ThumbnailItem(file, isSelected = file == currentImageFile, onThumbnailClick)
                 Spacer(modifier = Modifier.width(12.dp))
             }
         }
@@ -515,7 +668,9 @@ fun BottomControls(
 }
 
 @Composable
-fun ThumbnailItem(file: File, onClick: (File) -> Unit) {
+fun ThumbnailItem(file: File,
+                  isSelected: Boolean = false,
+                  onClick: (File) -> Unit) {
     var bitmap by remember(file) { mutableStateOf<ImageBitmap?>(null) }
     
     LaunchedEffect(file) {
@@ -532,7 +687,7 @@ fun ThumbnailItem(file: File, onClick: (File) -> Unit) {
             .size(80.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.1f))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .border(if (isSelected)3.dp else 0.dp, Color.White.copy(alpha = if (isSelected) 1f else 0.1f), RoundedCornerShape(16.dp))
             .clickable { onClick(file) },
         contentAlignment = Alignment.Center
     ) {
