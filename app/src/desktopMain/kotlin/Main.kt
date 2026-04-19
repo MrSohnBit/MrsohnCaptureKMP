@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.UsbOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,61 +71,11 @@ import mrsohn.capture.adb.AdbRunner
 import mrsohn.capture.adb.DeviceInfo
 import mrsohn.capture.ui.theme.MrSohnCaptureTheme
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.Properties
 import org.jetbrains.skia.Image as SkiaImage
 
-class WindowSettings(private val file: File) {
-    fun load(): WindowStateData {
-        val props = Properties()
-        if (file.exists()) {
-            try {
-                FileInputStream(file).use { props.load(it) }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
-        
-        val width = props.getProperty("width", "1100").toInt()
-        val height = props.getProperty("height", "850").toInt()
-        val x = props.getProperty("x", "-1").toInt()
-        val y = props.getProperty("y", "-1").toInt()
-
-        val position = if (x != -1 && y != -1 && isPointOnScreen(x, y)) {
-            WindowPosition(x.dp, y.dp)
-        } else {
-            WindowPosition(Alignment.Center)
-        }
-
-        return WindowStateData(DpSize(width.dp, height.dp), position)
-    }
-
-    fun save(width: Int, height: Int, x: Int, y: Int) {
-        val props = Properties()
-        props.setProperty("width", width.toString())
-        props.setProperty("height", height.toString())
-        props.setProperty("x", x.toString())
-        props.setProperty("y", y.toString())
-        try {
-            FileOutputStream(file).use { props.store(it, "Window Settings") }
-        } catch (e: Exception) { e.printStackTrace() }
-    }
-
-    private fun isPointOnScreen(x: Int, y: Int): Boolean {
-        val ge = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
-        val screens = ge.screenDevices
-        for (screen in screens) {
-            if (screen.defaultConfiguration.bounds.contains(x, y)) {
-                return true
-            }
-        }
-        return false
-    }
-}
-
-data class WindowStateData(val size: DpSize, val position: WindowPosition)
 
 fun main() = application {
     val settingsFile = File("window_settings.properties")
