@@ -20,10 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Image
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.rounded.UsbOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -63,6 +63,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -95,12 +96,18 @@ fun main() = application {
 
     Window(
         onCloseRequest = {
-            settings.save(
-                windowState.size.width.value.toInt(),
-                windowState.size.height.value.toInt(),
-                windowState.position.x.value.toInt(),
-                windowState.position.y.value.toInt()
-            )
+            try {
+                val x = if (windowState.position.x.isSpecified) windowState.position.x.value.toInt() else -1
+                val y = if (windowState.position.y.isSpecified) windowState.position.y.value.toInt() else -1
+                settings.save(
+                    windowState.size.width.value.toInt(),
+                    windowState.size.height.value.toInt(),
+                    x,
+                    y
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             exitApplication()
         },
         title = "MrSohn Capture",
@@ -126,7 +133,6 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
     var statusMessage by remember { mutableStateOf("Ready") }
     var showFlash by remember { mutableStateOf(false) }
 
-    var currentIndex by remember { mutableStateOf(-1) }
     val currentImageFile: File? = currentlyDisplayedFile.takeIf { it != null }
 
     val saveDir = remember {
@@ -152,9 +158,14 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
         scope.launch {
             try {
                 val bytes = withContext(Dispatchers.IO) { file.readBytes() }
-                currentImage = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
-                currentlyDisplayedFile = file
-                statusMessage = "Viewing: ${file.name}"
+                val skiaImage = SkiaImage.makeFromEncoded(bytes)
+                if (skiaImage != null) {
+                    currentImage = skiaImage.toComposeImageBitmap()
+                    currentlyDisplayedFile = file
+                    statusMessage = "Viewing: ${file.name}"
+                } else {
+                    statusMessage = "Failed to decode image"
+                }
             } catch (e: Exception) {
                 statusMessage = "Error loading image"
             }
@@ -165,14 +176,13 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
         val files = capturedImages
         if (files.isEmpty()) return
 
-        currentIndex = currentlyDisplayedFile?.let { current ->
+        val currentIdx = currentlyDisplayedFile?.let { current ->
             files.indexOfFirst { it.absolutePath == current.absolutePath }
         } ?: -1
 
         val nextIndex = when {
-            currentIndex == -1 && direction > 0 -> 0
-            currentIndex == -1 && direction < 0 -> files.lastIndex
-            else -> (currentIndex + direction).coerceIn(0, files.lastIndex)
+            currentIdx == -1 -> if (direction > 0) 0 else files.lastIndex
+            else -> (currentIdx + direction).coerceIn(0, files.lastIndex)
         }
 
         showFile(files[nextIndex])
@@ -180,16 +190,24 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
 
     fun deleteFile() {
         val files = capturedImages
-        currentIndex = currentlyDisplayedFile?.let { current ->
+        val currentIdx = currentlyDisplayedFile?.let { current ->
             files.indexOfFirst { it.absolutePath == current.absolutePath }
         } ?: -1
-        val file = files.getOrNull(currentIndex) ?: return
+        val file = files.getOrNull(currentIdx) ?: return
         scope.launch {
             try {
                 if (file.delete()) {
                     refreshCapturedImages()
                     statusMessage = "Deleted: ${file.name}"
-                    showAdjacentFile(if (currentIndex == files.lastIndex) -1 else 1)
+                    // After delete, try to show the next available file
+                    val remainingFiles = files.filter { it.absolutePath != file.absolutePath }
+                    if (remainingFiles.isNotEmpty()) {
+                        val nextIdx = currentIdx.coerceIn(0, remainingFiles.lastIndex)
+                        showFile(remainingFiles[nextIdx])
+                    } else {
+                        currentImage = null
+                        currentlyDisplayedFile = null
+                    }
                 } else {
                     statusMessage = "Failed to delete ${file.name}"
                 }
@@ -201,10 +219,10 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
 
     fun clipboardCopy() {
         val files = capturedImages
-        currentIndex = currentlyDisplayedFile?.let { current ->
+        val currentIdx = currentlyDisplayedFile?.let { current ->
             files.indexOfFirst { it.absolutePath == current.absolutePath }
         } ?: -1
-        val file = files.getOrNull(currentIndex) ?: return
+        val file = files.getOrNull(currentIdx) ?: return
 
         scope.launch {
             try {
@@ -350,9 +368,19 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
         }
     }
 
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     MrSohnCaptureTheme {
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusTarget()
+                .onPreviewKeyEvent { handleShortcut(it) },
             color = MaterialTheme.colorScheme.background
         ) {
             Box(
@@ -366,7 +394,6 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
                             )
                         )
                     )
-                    .onPreviewKeyEvent { handleShortcut(it) }
             ) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     Sidebar(
@@ -556,16 +583,7 @@ fun HeaderArea(status: String) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(
-            onClick = {},
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.1f))
-        ) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
-        }
-        
+
         Column(
             modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -603,18 +621,16 @@ fun EmptyPreview(hasDevice: Boolean) {
 
 @Composable
 fun BottomControls(
-    currentImageFile: File?,capturedImages: List<File>,
+    currentImageFile: File?,
+    capturedImages: List<File>,
     onThumbnailClick: (File) -> Unit,
 ) {
     // LazyRow의 상태를 관리하기 위한 state 추가
     val listState = rememberLazyListState()
 
-    // 표시할 이미지 리스트 (상위 10개)
-    val displayImages = remember(capturedImages) { capturedImages.take(10) }
-
     // 현재 표시 중인 파일이 변경될 때마다 해당 위치로 스크롤
     LaunchedEffect(currentImageFile) {
-        val index = displayImages.indexOfFirst { it.absolutePath == currentImageFile?.absolutePath }
+        val index = capturedImages.indexOfFirst { it.absolutePath == currentImageFile?.absolutePath }
         if (index >= 0) {
             listState.animateScrollToItem(index)
         }
@@ -630,7 +646,7 @@ fun BottomControls(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            items(displayImages) { file ->
+            items(capturedImages) { file ->
                 ThumbnailItem(
                     file = file,
                     isSelected = file.absolutePath == currentImageFile?.absolutePath,
@@ -652,7 +668,10 @@ fun ThumbnailItem(file: File,
         withContext(Dispatchers.IO) {
             try {
                 val bytes = file.readBytes()
-                bitmap = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+                val skiaImage = SkiaImage.makeFromEncoded(bytes)
+                if (skiaImage != null) {
+                    bitmap = skiaImage.toComposeImageBitmap()
+                }
             } catch (e: Exception) { e.printStackTrace() }
         }
     }

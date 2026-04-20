@@ -17,10 +17,10 @@ class WindowSettings(private val file: File, val defaultSize: DpSize = DpSize(80
             } catch (e: Exception) { e.printStackTrace() }
         }
 
-        val width = props.getProperty("width", "${defaultSize.width}").toInt()
-        val height = props.getProperty("height", "${defaultSize.height}").toInt()
-        val x = props.getProperty("x", "-1").toInt()
-        val y = props.getProperty("y", "-1").toInt()
+        val width = props.getProperty("width", defaultSize.width.value.toInt().toString()).toIntOrNull() ?: defaultSize.width.value.toInt()
+        val height = props.getProperty("height", defaultSize.height.value.toInt().toString()).toIntOrNull() ?: defaultSize.height.value.toInt()
+        val x = props.getProperty("x", "-1").toIntOrNull() ?: -1
+        val y = props.getProperty("y", "-1").toIntOrNull() ?: -1
 
         val position = if (x != -1 && y != -1 && isPointOnScreen(x, y)) {
             WindowPosition(x.dp, y.dp)
