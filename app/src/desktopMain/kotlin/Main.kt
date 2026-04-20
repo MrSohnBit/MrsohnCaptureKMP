@@ -85,7 +85,8 @@ import kotlin.system.exitProcess
 import org.jetbrains.skia.Image as SkiaImage
 
 fun main() = application {
-    val settingsFile = File("window_settings.properties")
+    // 저장 경로를 사용자 홈 디렉토리로 변경하여 패키징 후에도 권한 문제 없이 작동하게 함
+    val settingsFile = File(System.getProperty("user.home"), ".mrsohn_capture_settings.properties")
     val settings = WindowSettings(settingsFile)
     val savedState = settings.load()
 
@@ -94,33 +95,34 @@ fun main() = application {
         size = savedState.size
     )
 
+    // 저장 및 종료 로직 통합
+    val saveAndExit = {
+        try {
+            val x = if (windowState.position.x.isSpecified) windowState.position.x.value.toInt() else -1
+            val y = if (windowState.position.y.isSpecified) windowState.position.y.value.toInt() else -1
+            settings.save(
+                windowState.size.width.value.toInt(),
+                windowState.size.height.value.toInt(),
+                x,
+                y
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        exitApplication()
+    }
+
     Window(
-        onCloseRequest = {
-            try {
-                val x = if (windowState.position.x.isSpecified) windowState.position.x.value.toInt() else -1
-                val y = if (windowState.position.y.isSpecified) windowState.position.y.value.toInt() else -1
-                settings.save(
-                    windowState.size.width.value.toInt(),
-                    windowState.size.height.value.toInt(),
-                    x,
-                    y
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            exitApplication()
-        },
+        onCloseRequest = saveAndExit,
         title = "MrSohn Capture",
         state = windowState
     ) {
-        MrSohnCaptureApp() {
-            exitApplication()
-        }
+        MrSohnCaptureApp(onExit = saveAndExit)
     }
 }
 
 @Composable
-fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
+fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
     val adbRunner = remember { AdbRunner() }
     val scope = rememberCoroutineScope()
 
@@ -287,12 +289,12 @@ fun MrSohnCaptureApp(exitApplication : () -> Unit = { exitProcess(0) }) {
             }
 
             event.key == Key.W && (event.isMetaPressed || event.isCtrlPressed) -> {
-                exitApplication()
+                onExit()
                 true
             }
 
             event.key == Key.F4 && event.isAltPressed -> {
-                exitApplication()
+                onExit()
                 true
             }
 
