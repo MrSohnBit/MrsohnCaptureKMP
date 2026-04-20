@@ -1,5 +1,4 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,11 +19,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Image
@@ -52,7 +51,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -575,7 +573,7 @@ fun HeaderArea(status: String) {
         ) {
             Text(
                 "MrSohn Capture",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
@@ -584,47 +582,6 @@ fun HeaderArea(status: String) {
     }
 }
 
-@Composable
-fun FocusBrackets(modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidthPx = 2.dp.toPx()
-            val bracketLengthPx = 20.dp.toPx()
-            val color = Color.White.copy(alpha = 0.6f)
-            val canvasWidth = size.width
-            val canvasHeight = size.height
-            
-            val topLeftPath = androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f, bracketLengthPx)
-                lineTo(0f, 0f)
-                lineTo(bracketLengthPx, 0f)
-            }
-            drawPath(path = topLeftPath, color = color, style = Stroke(strokeWidthPx))
-            
-            val topRightPath = androidx.compose.ui.graphics.Path().apply {
-                moveTo(canvasWidth - bracketLengthPx, 0f)
-                lineTo(canvasWidth, 0f)
-                lineTo(canvasWidth, bracketLengthPx)
-            }
-            drawPath(path = topRightPath, color = color, style = Stroke(strokeWidthPx))
-            
-            val bottomLeftPath = androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f, canvasHeight - bracketLengthPx)
-                lineTo(0f, canvasHeight)
-                lineTo(bracketLengthPx, canvasHeight)
-            }
-            drawPath(path = bottomLeftPath, color = color, style = Stroke(strokeWidthPx))
-            
-            val bottomRightPath = androidx.compose.ui.graphics.Path().apply {
-                moveTo(canvasWidth - bracketLengthPx, canvasHeight)
-                lineTo(canvasWidth, canvasHeight)
-                lineTo(canvasWidth, canvasHeight - bracketLengthPx)
-            }
-            drawPath(path = bottomRightPath, color = color, style = Stroke(strokeWidthPx))
-        }
-        Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(24.dp))
-    }
-}
 
 @Composable
 fun EmptyPreview(hasDevice: Boolean) {
@@ -646,21 +603,39 @@ fun EmptyPreview(hasDevice: Boolean) {
 
 @Composable
 fun BottomControls(
-    currentImageFile: File?,
-    capturedImages: List<File>,
+    currentImageFile: File?,capturedImages: List<File>,
     onThumbnailClick: (File) -> Unit,
 ) {
+    // LazyRow의 상태를 관리하기 위한 state 추가
+    val listState = rememberLazyListState()
+
+    // 표시할 이미지 리스트 (상위 10개)
+    val displayImages = remember(capturedImages) { capturedImages.take(10) }
+
+    // 현재 표시 중인 파일이 변경될 때마다 해당 위치로 스크롤
+    LaunchedEffect(currentImageFile) {
+        val index = displayImages.indexOfFirst { it.absolutePath == currentImageFile?.absolutePath }
+        if (index >= 0) {
+            listState.animateScrollToItem(index)
+        }
+    }
+
     Box(
         modifier = Modifier.fillMaxWidth().height(100.dp),
         contentAlignment = Alignment.Center
     ) {
         LazyRow(
+            state = listState, // state 연결
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            items(capturedImages.take(10)) { file ->
-                ThumbnailItem(file, isSelected = file == currentImageFile, onThumbnailClick)
+            items(displayImages) { file ->
+                ThumbnailItem(
+                    file = file,
+                    isSelected = file.absolutePath == currentImageFile?.absolutePath,
+                    onClick = onThumbnailClick
+                )
                 Spacer(modifier = Modifier.width(12.dp))
             }
         }
@@ -687,7 +662,7 @@ fun ThumbnailItem(file: File,
             .size(80.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.1f))
-            .border(if (isSelected)3.dp else 0.dp, Color.White.copy(alpha = if (isSelected) 1f else 0.1f), RoundedCornerShape(16.dp))
+            .border(if (isSelected)3.dp else 0.dp, Color.Red.copy(alpha = if (isSelected) 1f else 0.1f), RoundedCornerShape(16.dp))
             .clickable { onClick(file) },
         contentAlignment = Alignment.Center
     ) {
@@ -702,21 +677,21 @@ fun ThumbnailItem(file: File,
             Icon(Icons.Rounded.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.2f))
         }
         
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp),
-            contentAlignment = Alignment.TopEnd
-        ) {
-            Text(
-                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(file.lastModified())),
-                color = Color.White,
-                fontSize = 10.sp,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-        }
+//        Box(
+//            modifier = Modifier
+//                .fillMaxSize()
+//                .padding(6.dp),
+//            contentAlignment = Alignment.TopEnd
+//        ) {
+//            Text(
+//                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(file.lastModified())),
+//                color = Color.White,
+//                fontSize = 10.sp,
+//                modifier = Modifier
+//                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+//                    .padding(horizontal = 4.dp, vertical = 2.dp)
+//            )
+//        }
     }
 }
 
