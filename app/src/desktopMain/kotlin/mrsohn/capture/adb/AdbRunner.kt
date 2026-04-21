@@ -7,7 +7,30 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class AdbRunner(private val adbPath: String = "adb") {
+class AdbRunner {
+
+    private val adbPath: String by lazy { findAdbPath() }
+
+    private fun findAdbPath(): String {
+        // 1. Check common Environment Variables
+        val sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+        if (sdkRoot != null) {
+            val adb = File(sdkRoot, "platform-tools/adb")
+            if (adb.exists()) return adb.absolutePath
+        }
+
+        // 2. Check user-specific default path (macOS)
+        val home = System.getProperty("user.home")
+        val macDefaultAdb = File(home, "Library/Android/sdk/platform-tools/adb")
+        if (macDefaultAdb.exists()) return macDefaultAdb.absolutePath
+
+        // 3. Check Windows default path
+        val winDefaultAdb = File(System.getenv("LOCALAPPDATA") ?: "", "Android/Sdk/platform-tools/adb.exe")
+        if (winDefaultAdb.exists()) return winDefaultAdb.absolutePath
+
+        // 4. Fallback to system PATH
+        return "adb"
+    }
 
     fun isAdbAvailable(): Boolean {
         return try {
@@ -46,10 +69,8 @@ class AdbRunner(private val adbPath: String = "adb") {
     fun captureScreen(deviceId: String?, targetFile: File): Boolean {
         return try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            // Use a directory that is likely to exist and be writable
             val tempDevicePath = "/sdcard/Download/mrsohn_capture_temp_${timestamp}.png"
             
-            // 1. Capture on device
             val capCmd = mutableListOf(adbPath)
             if (!deviceId.isNullOrBlank()) {
                 capCmd.addAll(listOf("-s", deviceId))
@@ -59,7 +80,6 @@ class AdbRunner(private val adbPath: String = "adb") {
             val capProcess = ProcessBuilder(capCmd).start()
             if (capProcess.waitFor() != 0) return false
 
-            // 2. Pull to PC
             val pullCmd = mutableListOf(adbPath)
             if (!deviceId.isNullOrBlank()) {
                 pullCmd.addAll(listOf("-s", deviceId))
@@ -69,7 +89,6 @@ class AdbRunner(private val adbPath: String = "adb") {
             val pullProcess = ProcessBuilder(pullCmd).start()
             if (pullProcess.waitFor() != 0) return false
 
-            // 3. Remove from device
             val rmCmd = mutableListOf(adbPath)
             if (!deviceId.isNullOrBlank()) {
                 rmCmd.addAll(listOf("-s", deviceId))
@@ -84,11 +103,6 @@ class AdbRunner(private val adbPath: String = "adb") {
         }
     }
 
-    /**
-     * Captures the screen and returns the raw bytes of the PNG image.
-     * Note: ADB on Windows might mangle binary output due to line ending conversion (LF -> CRLF).
-     * This method works best on macOS/Linux. On Windows, 'pulling' a file is safer.
-     */
     fun captureScreenToStream(deviceId: String?): ByteArray? {
         return try {
             val cmd = mutableListOf(adbPath)
