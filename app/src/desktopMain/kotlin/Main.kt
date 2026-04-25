@@ -3,45 +3,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Collections
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.PhoneAndroid
-import androidx.compose.material.icons.rounded.Screenshot
-import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material.icons.rounded.UsbOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,14 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isMetaPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -85,7 +48,6 @@ import kotlin.system.exitProcess
 import org.jetbrains.skia.Image as SkiaImage
 
 fun main() = application {
-    // 저장 경로를 사용자 홈 디렉토리로 변경하여 패키징 후에도 권한 문제 없이 작동하게 함
     val settingsFile = File(System.getProperty("user.home"), ".mrsohn_capture_settings.properties")
     val settings = WindowSettings(settingsFile)
     val savedState = settings.load()
@@ -95,7 +57,10 @@ fun main() = application {
         size = savedState.size
     )
 
-    // 저장 및 종료 로직 통합
+    // 가변적인 설정을 관리하기 위한 State (저장 경로 및 ADB 경로)
+    var currentAdbPath by mutableStateOf(savedState.adbPath)
+    var currentSavePath by mutableStateOf(savedState.savePath)
+
     val saveAndExit = {
         try {
             val x = if (windowState.position.x.isSpecified) windowState.position.x.value.toInt() else -1
@@ -104,7 +69,9 @@ fun main() = application {
                 windowState.size.width.value.toInt(),
                 windowState.size.height.value.toInt(),
                 x,
-                y
+                y,
+                currentAdbPath,
+                currentSavePath
             )
         } catch (e: Exception) {
             e.printStackTrace()
@@ -117,14 +84,32 @@ fun main() = application {
         title = "MrSohn Capture",
         state = windowState
     ) {
-        MrSohnCaptureApp(onExit = saveAndExit)
+        MrSohnCaptureApp(
+            initialAdbPath = currentAdbPath,
+            initialSavePath = currentSavePath,
+            onSettingsChanged = { adb, save ->
+                currentAdbPath = adb
+                currentSavePath = save
+            },
+            onExit = saveAndExit
+        )
     }
 }
 
 @Composable
-fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
-    val adbRunner = remember { AdbRunner() }
+fun MrSohnCaptureApp(
+    initialAdbPath: String,
+    initialSavePath: String,
+    onSettingsChanged: (String, String) -> Unit,
+    onExit: () -> Unit
+) {
     val scope = rememberCoroutineScope()
+    
+    // 설정 값들
+    var adbPath by remember { mutableStateOf(initialAdbPath) }
+    var savePath by remember { mutableStateOf(initialSavePath) }
+    
+    val adbRunner = remember(adbPath) { AdbRunner(adbPath.takeIf { it.isNotBlank() }) }
 
     var devices by remember { mutableStateOf(listOf<DeviceInfo>()) }
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -137,9 +122,13 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
 
     val currentImageFile: File? = currentlyDisplayedFile.takeIf { it != null }
 
-    val saveDir = remember {
-        val picturesDir = File(System.getProperty("user.home"), "Pictures")
-        val dir = File(picturesDir, "MrSohnCapture")
+    val saveDir = remember(savePath) {
+        val dir = if (savePath.isNotBlank()) {
+            File(savePath)
+        } else {
+            val picturesDir = File(System.getProperty("user.home"), "Pictures")
+            File(picturesDir, "MrSohnCapture")
+        }
         if (!dir.exists()) dir.mkdirs()
         dir
     }
@@ -201,7 +190,6 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                 if (file.delete()) {
                     refreshCapturedImages()
                     statusMessage = "Deleted: ${file.name}"
-                    // After delete, try to show the next available file
                     val remainingFiles = files.filter { it.absolutePath != file.absolutePath }
                     if (remainingFiles.isNotEmpty()) {
                         val nextIdx = currentIdx.coerceIn(0, remainingFiles.lastIndex)
@@ -238,12 +226,8 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
         }
     }
 
-
-
-
-    // Extracted Capture Logic
     val performCapture = {
-        if (selectedDevice != null /*&& !isCapturing*/) {
+        if (selectedDevice != null) {
             scope.launch {
                 isCapturing = true
                 statusMessage = "Capturing ${selectedDevice?.model}..."
@@ -259,17 +243,18 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                     val bytes = withContext(Dispatchers.IO) { file.readBytes() }
                     currentImage = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
                     currentlyDisplayedFile = file
-                    statusMessage = "Saved to Pictures/MrSohnCapture"
+                    statusMessage = "Saved to ${saveDir.name}"
                     showFlash = true
                 } else {
-                    statusMessage = "Capture failed"
+                    statusMessage = "Capture failed. Check ADB path."
                 }
                 isCapturing = false
             }
         }
+        Unit
     }
 
-    fun handleShortcut(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+    fun handleShortcut(event: KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
 
         return when {
@@ -277,50 +262,40 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                 performCapture()
                 true
             }
-
             event.key == Key.DirectionLeft -> {
                 showAdjacentFile(-1)
                 true
             }
-
             event.key == Key.DirectionRight -> {
                 showAdjacentFile(1)
                 true
             }
-
             event.key == Key.W && (event.isMetaPressed || event.isCtrlPressed) -> {
                 onExit()
                 true
             }
-
             event.key == Key.F4 && event.isAltPressed -> {
                 onExit()
                 true
             }
-
             event.key == Key.Delete -> {
                 deleteFile()
                 true
             }
-
             event.key == Key.C && (event.isMetaPressed || event.isCtrlPressed) -> {
                 clipboardCopy()
                 true
             }
-
             else -> false
         }
     }
 
-    // Load existing captures
     LaunchedEffect(Unit) {
         refreshCapturedImages()
     }
 
-    // Keep gallery in sync with filesystem changes
-    LaunchedEffect(Unit) {
+    LaunchedEffect(saveDir) {
         var lastSnapshot = emptySet<String>()
-
         while (true) {
             val currentSnapshot = withContext(Dispatchers.IO) {
                 saveDir.listFiles { _, name -> name.endsWith(".png") }
@@ -328,18 +303,15 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                     ?.toSet()
                     ?: emptySet()
             }
-
             if (currentSnapshot != lastSnapshot) {
                 lastSnapshot = currentSnapshot
                 refreshCapturedImages()
             }
-
             delay(1000)
         }
     }
 
-    // Device discovery loop
-    LaunchedEffect(Unit) {
+    LaunchedEffect(adbRunner) {
         while(true) {
             val foundDevices = withContext(Dispatchers.IO) { adbRunner.getDevices() }
             devices = foundDevices
@@ -351,7 +323,6 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
             delay(5000)
         }
     }
-
 
     val onEdit = {
         currentlyDisplayedFile?.let { file ->
@@ -368,12 +339,26 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                 }
             }
         }
+        Unit
     }
 
     val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+    var showSettings by remember { mutableStateOf(false) }
+
+    if (showSettings) {
+        SettingsDialog(
+            initialAdbPath = adbPath,
+            initialSavePath = savePath,
+            onDismiss = { showSettings = false },
+            onSave = { newAdbPath, newSavePath ->
+                adbPath = newAdbPath
+                savePath = newSavePath
+                onSettingsChanged(newAdbPath, newSavePath)
+                showSettings = false
+            }
+        )
     }
 
     MrSohnCaptureTheme {
@@ -390,10 +375,7 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF0F1B2C),
-                                Color(0xFF162A44)
-                            )
+                            colors = listOf(Color(0xFF0F1B2C), Color(0xFF162A44))
                         )
                     )
             ) {
@@ -407,11 +389,11 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                                 java.awt.Desktop.getDesktop().open(saveDir)
                             } catch (e: Exception) { e.printStackTrace() }
                         },
-                        onEdit = { onEdit() },
+                        onEdit = onEdit,
+                        onOpenSettings = { showSettings = true },
                         isEditEnabled = currentlyDisplayedFile != null
                     )
 
-                    // Main Content Area
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -422,7 +404,6 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                         HeaderArea(statusMessage)
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Preview Container (Now Clickable)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -430,7 +411,7 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                                 .clip(RoundedCornerShape(40.dp))
                                 .background(Color.Black.copy(alpha = 0.3f))
                                 .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(40.dp))
-                                .clickable(enabled = selectedDevice != null /*&& !isCapturing*/) { performCapture() },
+                                .clickable(enabled = selectedDevice != null) { performCapture() },
                             contentAlignment = Alignment.Center
                         ) {
                             if (currentImage != null) {
@@ -444,39 +425,21 @@ fun MrSohnCaptureApp(onExit: () -> Unit = { exitProcess(0) }) {
                                 EmptyPreview(selectedDevice != null)
                             }
 
-//                            FocusBrackets(modifier = Modifier.size(120.dp))
-
                             if (showFlash) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.White.copy(alpha = 0.8f))
-                                )
+                                Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.8f)))
                                 LaunchedEffect(Unit) {
                                     delay(100)
                                     showFlash = false
                                 }
                             }
-
-//                            if (isCapturing) {
-//                                Box(
-//                                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)),
-//                                    contentAlignment = Alignment.Center
-//                                ) {
-//                                    CircularProgressIndicator(color = Color(0xFFF7AF39))
-//                                }
-//                            }
                         }
 
                         Spacer(modifier = Modifier.height(32.dp))
 
-                        // Bottom Area: Recent Captures Only
                         BottomControls(
                             currentImageFile = currentImageFile,
                             capturedImages = capturedImages,
-                            onThumbnailClick = { file ->
-                                showFile(file)
-                            }
+                            onThumbnailClick = { showFile(it) }
                         )
                     }
                 }
@@ -492,6 +455,7 @@ fun Sidebar(
     onDeviceSelected: (DeviceInfo) -> Unit,
     onOpenGallery: () -> Unit,
     onEdit: () -> Unit,
+    onOpenSettings: () -> Unit,
     isEditEnabled: Boolean
 ) {
     Column(
@@ -566,6 +530,7 @@ fun Sidebar(
 
         Spacer(modifier = Modifier.height(8.dp))
         
+
         Button(
             onClick = onOpenGallery,
             modifier = Modifier.fillMaxWidth(),
@@ -576,7 +541,85 @@ fun Sidebar(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Gallery", fontSize = 14.sp, color = Color.White)
         }
+
+        Button(
+            onClick = onOpenSettings,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Settings", fontSize = 14.sp, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
     }
+}
+
+@Composable
+fun SettingsDialog(
+    initialAdbPath: String,
+    initialSavePath: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit
+) {
+    var adbPath by remember { mutableStateOf(initialAdbPath) }
+    var savePath by remember { mutableStateOf(initialSavePath) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Settings", color = Color.White) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                Text("ADB Path (platform-tools)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                TextField(
+                    value = adbPath,
+                    onValueChange = { adbPath = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("e.g. /path/to/adb") },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text("Save Directory (PC)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                TextField(
+                    value = savePath,
+                    onValueChange = { savePath = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("e.g. /Users/name/Pictures/Captures") },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(adbPath, savePath) }) {
+                Text("Save", color = Color(0xFFF7AF39))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color.Gray)
+            }
+        },
+        containerColor = Color(0xFF162A44),
+        shape = RoundedCornerShape(24.dp)
+    )
 }
 
 @Composable
@@ -585,7 +628,6 @@ fun HeaderArea(status: String) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-
         Column(
             modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -601,7 +643,6 @@ fun HeaderArea(status: String) {
         }
     }
 }
-
 
 @Composable
 fun EmptyPreview(hasDevice: Boolean) {
@@ -627,10 +668,8 @@ fun BottomControls(
     capturedImages: List<File>,
     onThumbnailClick: (File) -> Unit,
 ) {
-    // LazyRow의 상태를 관리하기 위한 state 추가
     val listState = rememberLazyListState()
 
-    // 현재 표시 중인 파일이 변경될 때마다 해당 위치로 스크롤
     LaunchedEffect(currentImageFile) {
         val index = capturedImages.indexOfFirst { it.absolutePath == currentImageFile?.absolutePath }
         if (index >= 0) {
@@ -643,7 +682,7 @@ fun BottomControls(
         contentAlignment = Alignment.Center
     ) {
         LazyRow(
-            state = listState, // state 연결
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center
@@ -661,9 +700,7 @@ fun BottomControls(
 }
 
 @Composable
-fun ThumbnailItem(file: File,
-                  isSelected: Boolean = false,
-                  onClick: (File) -> Unit) {
+fun ThumbnailItem(file: File, isSelected: Boolean = false, onClick: (File) -> Unit) {
     var bitmap by remember(file) { mutableStateOf<ImageBitmap?>(null) }
     
     LaunchedEffect(file) {
@@ -683,7 +720,7 @@ fun ThumbnailItem(file: File,
             .size(80.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.1f))
-            .border(if (isSelected)3.dp else 0.dp, Color.Red.copy(alpha = if (isSelected) 1f else 0.1f), RoundedCornerShape(16.dp))
+            .border(if (isSelected) 3.dp else 0.dp, Color.Red.copy(alpha = if (isSelected) 1f else 0.1f), RoundedCornerShape(16.dp))
             .clickable { onClick(file) },
         contentAlignment = Alignment.Center
     ) {
@@ -697,27 +734,5 @@ fun ThumbnailItem(file: File,
         } else {
             Icon(Icons.Rounded.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.2f))
         }
-        
-//        Box(
-//            modifier = Modifier
-//                .fillMaxSize()
-//                .padding(6.dp),
-//            contentAlignment = Alignment.TopEnd
-//        ) {
-//            Text(
-//                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(file.lastModified())),
-//                color = Color.White,
-//                fontSize = 10.sp,
-//                modifier = Modifier
-//                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-//                    .padding(horizontal = 4.dp, vertical = 2.dp)
-//            )
-//        }
     }
-}
-
-@Preview
-@Composable
-fun PreviewMrSohnCaptureApp() {
-    MrSohnCaptureApp()
 }

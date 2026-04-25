@@ -28,15 +28,21 @@ class WindowSettings(private val file: File, val defaultSize: DpSize = DpSize(80
             WindowPosition(Alignment.Companion.Center)
         }
 
-        return WindowStateData(DpSize(width.dp, height.dp), position)
+        // 새 설정 항목 추가
+        val adbPath = props.getProperty("adbPath", "")
+        val savePath = props.getProperty("savePath", "")
+
+        return WindowStateData(DpSize(width.dp, height.dp), position, adbPath, savePath)
     }
 
-    fun save(width: Int, height: Int, x: Int, y: Int) {
+    fun save(width: Int, height: Int, x: Int, y: Int, adbPath: String, savePath: String) {
         val props = Properties()
         props.setProperty("width", width.toString())
         props.setProperty("height", height.toString())
         props.setProperty("x", x.toString())
         props.setProperty("y", y.toString())
+        props.setProperty("adbPath", adbPath)
+        props.setProperty("savePath", savePath)
         try {
             FileOutputStream(file).use { props.store(it, "Window Settings") }
         } catch (e: Exception) { e.printStackTrace() }
@@ -54,4 +60,9 @@ class WindowSettings(private val file: File, val defaultSize: DpSize = DpSize(80
     }
 }
 
-data class WindowStateData(val size: DpSize, val position: WindowPosition)
+data class WindowStateData(
+    val size: DpSize, 
+    val position: WindowPosition,
+    val adbPath: String,
+    val savePath: String
+)

@@ -7,28 +7,30 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class AdbRunner {
+class AdbRunner(private val customAdbPath: String? = null) {
 
-    private val adbPath: String by lazy { findAdbPath() }
+    private val adbPath: String by lazy {
+        if (!customAdbPath.isNullOrBlank() && File(customAdbPath).exists()) {
+            customAdbPath
+        } else {
+            findAdbPath()
+        }
+    }
 
     private fun findAdbPath(): String {
-        // 1. Check common Environment Variables
         val sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
         if (sdkRoot != null) {
             val adb = File(sdkRoot, "platform-tools/adb")
             if (adb.exists()) return adb.absolutePath
         }
 
-        // 2. Check user-specific default path (macOS)
         val home = System.getProperty("user.home")
         val macDefaultAdb = File(home, "Library/Android/sdk/platform-tools/adb")
         if (macDefaultAdb.exists()) return macDefaultAdb.absolutePath
 
-        // 3. Check Windows default path
         val winDefaultAdb = File(System.getenv("LOCALAPPDATA") ?: "", "Android/Sdk/platform-tools/adb.exe")
         if (winDefaultAdb.exists()) return winDefaultAdb.absolutePath
 
-        // 4. Fallback to system PATH
         return "adb"
     }
 
@@ -100,27 +102,6 @@ class AdbRunner {
         } catch (e: Exception) {
             e.printStackTrace()
             false
-        }
-    }
-
-    fun captureScreenToStream(deviceId: String?): ByteArray? {
-        return try {
-            val cmd = mutableListOf(adbPath)
-            if (!deviceId.isNullOrBlank()) {
-                cmd.addAll(listOf("-s", deviceId))
-            }
-            cmd.addAll(listOf("shell", "screencap", "-p"))
-            
-            val process = ProcessBuilder(cmd).start()
-            val bytes = process.inputStream.readAllBytes()
-            if (process.waitFor() == 0) {
-                bytes
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
         }
     }
 }
