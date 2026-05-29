@@ -38,8 +38,12 @@ import kotlinx.coroutines.withContext
 import mrsohn.capture.adb.AdbRunner
 import mrsohn.capture.adb.DeviceInfo
 import mrsohn.capture.ui.theme.MrSohnCaptureTheme
+import java.awt.KeyboardFocusManager
 import java.awt.Toolkit
+import java.beans.PropertyChangeListener
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.BasicFileAttributes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -133,9 +137,13 @@ fun MrSohnCaptureApp(
         dir
     }
 
+    fun File.creationTimestamp(): Long = runCatching {
+        Files.readAttributes(toPath(), BasicFileAttributes::class.java).creationTime().toMillis()
+    }.getOrElse { lastModified() }
+
     fun refreshCapturedImages() {
         capturedImages = saveDir.listFiles { _, name -> name.endsWith(".png") }
-            ?.sortedByDescending { it.lastModified() }
+            ?.sortedByDescending { it.creationTimestamp() }
             ?: emptyList()
 
         if (currentlyDisplayedFile != null && !currentlyDisplayedFile!!.exists()) {
@@ -154,6 +162,34 @@ fun MrSohnCaptureApp(
                     currentImage = skiaImage.toComposeImageBitmap()
                     currentlyDisplayedFile = file
                     statusMessage = "Viewing: ${file.name}"
+                } else {
+                    statusMessage = "Failed to decode image"
+                }
+            } catch (e: Exception) {
+                statusMessage = "Error loading image"
+            }
+        }
+    }
+
+    fun reloadCurrentFile(preserveStatusMessage: Boolean = true) {
+        val file = currentlyDisplayedFile ?: return
+        if (!file.exists()) {
+            currentImage = null
+            currentlyDisplayedFile = null
+            statusMessage = "Selected file was removed"
+            return
+        }
+
+        scope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+                val skiaImage = SkiaImage.makeFromEncoded(bytes)
+                if (skiaImage != null) {
+                    currentImage = skiaImage.toComposeImageBitmap()
+                    currentlyDisplayedFile = file
+                    if (!preserveStatusMessage) {
+                        statusMessage = "Viewing: ${file.name}"
+                    }
                 } else {
                     statusMessage = "Failed to decode image"
                 }
@@ -306,6 +342,7 @@ fun MrSohnCaptureApp(
             if (currentSnapshot != lastSnapshot) {
                 lastSnapshot = currentSnapshot
                 refreshCapturedImages()
+                reloadCurrentFile()
             }
             delay(1000)
         }
@@ -344,6 +381,22 @@ fun MrSohnCaptureApp(
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    DisposableEffect(Unit) {
+        val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
+        val listener = PropertyChangeListener { event ->
+            if (event.propertyName == "activeWindow" && event.newValue != null) {
+                focusRequester.requestFocus()
+                reloadCurrentFile()
+            }
+        }
+
+        focusManager.addPropertyChangeListener("activeWindow", listener)
+
+        onDispose {
+            focusManager.removePropertyChangeListener("activeWindow", listener)
+        }
+    }
 
     var showSettings by remember { mutableStateOf(false) }
 
@@ -735,4 +788,11 @@ fun ThumbnailItem(file: File, isSelected: Boolean = false, onClick: (File) -> Un
             Icon(Icons.Rounded.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.2f))
         }
     }
+}
+
+
+@Preview
+@Composable
+fun ThumbnailItemPreview() {
+    ThumbnailItem(file = File("test.jpg"), isSelected = true) {}
 }
