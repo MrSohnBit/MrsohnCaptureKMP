@@ -399,6 +399,7 @@ fun MrSohnCaptureApp(
     }
 
     var showSettings by remember { mutableStateOf(false) }
+    var showShortcutHelp by remember { mutableStateOf(false) }
 
     if (showSettings) {
         SettingsDialog(
@@ -412,6 +413,10 @@ fun MrSohnCaptureApp(
                 showSettings = false
             }
         )
+    }
+
+    if (showShortcutHelp) {
+        ShortcutHelpDialog(onDismiss = { showShortcutHelp = false })
     }
 
     MrSohnCaptureTheme {
@@ -454,7 +459,10 @@ fun MrSohnCaptureApp(
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        HeaderArea(statusMessage)
+                        HeaderArea(
+                            status = statusMessage,
+                            onShowShortcutHelp = { showShortcutHelp = true }
+                        )
                         Spacer(modifier = Modifier.height(24.dp))
 
                         Box(
@@ -676,7 +684,10 @@ fun SettingsDialog(
 }
 
 @Composable
-fun HeaderArea(status: String) {
+fun HeaderArea(
+    status: String,
+    onShowShortcutHelp: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -686,15 +697,79 @@ fun HeaderArea(status: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "MrSohn Capture",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = onShowShortcutHelp) {
+                    Icon(
+                        imageVector = Icons.Rounded.HelpOutline,
+                        contentDescription = "단축키 도움말 보기",
+                        tint = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+            }
             Text(
-                "MrSohn Capture",
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
+                status,
+                color = Color.Gray,
+                style = MaterialTheme.typography.labelSmall
             )
-            Text(status, color = Color.Gray, style = MaterialTheme.typography.labelSmall)
         }
     }
+}
+
+@Composable
+fun ShortcutHelpDialog(onDismiss: () -> Unit) {
+    val shortcuts = listOf(
+        "Space" to "현재 선택된 기기 화면 캡처",
+        "← / →" to "이전 / 다음 이미지 보기",
+        "Delete" to "현재 이미지 삭제",
+        "Ctrl+C 또는 Cmd+C" to "현재 이미지 클립보드 복사",
+        "Ctrl+W 또는 Cmd+W" to "앱 종료",
+        "Alt+F4" to "앱 종료"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        },
+        title = {
+            Text("단축키 안내")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                shortcuts.forEach { (shortcut, description) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = shortcut,
+                            modifier = Modifier.width(150.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    )
 }
 
 @Composable
