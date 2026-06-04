@@ -810,12 +810,30 @@ fun HeaderArea(
 
 @Composable
 fun ShortcutHelpDialog(onDismiss: () -> Unit) {
+    val isMac = remember {
+        System.getProperty("os.name")
+            .lowercase(Locale.getDefault())
+            .contains("mac")
+    }
+
+    val copyShortcut = if (isMac) {
+        "Ctrl+C 또는 Cmd+C"
+    } else {
+        "Ctrl+C"
+    }
+
+    val exitShortcut = if (isMac) {
+        "Ctrl+W 또는 Cmd+W"
+    } else {
+        "Ctrl+W"
+    }
+
     val shortcuts = listOf(
         "Space" to "현재 선택된 기기 화면 캡처",
         "← / →" to "이전 / 다음 이미지 보기",
         "Delete" to "현재 이미지 삭제",
-        "Ctrl+C 또는 Cmd+C" to "현재 이미지 클립보드 복사",
-        "Ctrl+W 또는 Cmd+W" to "앱 종료",
+        copyShortcut to "현재 이미지 클립보드 복사",
+        exitShortcut to "앱 종료",
         "Alt+F4" to "앱 종료"
     )
 
