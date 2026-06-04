@@ -104,4 +104,51 @@ class AdbRunner(private val customAdbPath: String? = null) {
             false
         }
     }
+
+    fun connectWireless(deviceId: String): String? {
+        return try {
+            // 1. IP 주소 가져오기
+            val ipCmd = listOf(adbPath, "-s", deviceId, "shell", "ip", "addr", "show", "wlan0")
+            val ipProcess = ProcessBuilder(ipCmd).start()
+            val reader = BufferedReader(InputStreamReader(ipProcess.inputStream))
+            var ip: String? = null
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                val currentLine = line ?: continue
+                if (currentLine.contains("inet ")) {
+                    ip = currentLine.trim().substringAfter("inet ").substringBefore("/")
+                    break
+                }
+            }
+            ipProcess.waitFor()
+
+            if (ip == null) return null
+
+            // 2. TCPIP 모드 활성화 (5555 포트)
+            val tcpipCmd = listOf(adbPath, "-s", deviceId, "tcpip", "5555")
+            ProcessBuilder(tcpipCmd).start().waitFor()
+
+            // 3. 연결
+            val connectCmd = listOf(adbPath, "connect", "$ip:5555")
+            val connectProcess = ProcessBuilder(connectCmd).start()
+            val connectReader = BufferedReader(InputStreamReader(connectProcess.inputStream))
+            val result = connectReader.readText()
+            connectProcess.waitFor()
+
+            if (result.contains("connected to")) "$ip:5555" else null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun disconnect(deviceId: String): Boolean {
+        return try {
+            val process = ProcessBuilder(adbPath, "disconnect", deviceId).start()
+            process.waitFor() == 0
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
 }

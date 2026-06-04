@@ -453,8 +453,36 @@ fun MrSohnCaptureApp(
                             } catch (e: Exception) { e.printStackTrace() }
                         },
                         onEdit = onEdit,
+                        onConnectWireless = {
+                            selectedDevice?.let { device ->
+                                scope.launch(Dispatchers.IO) {
+                                    statusMessage = "Connecting to ${device.model} wirelessly..."
+                                    val result = adbRunner.connectWireless(device.id)
+                                    statusMessage = if (result != null) {
+                                        "Connected to $result"
+                                    } else {
+                                        "Wireless connection failed"
+                                    }
+                                }
+                            }
+                        },
+                        onDisconnectWireless = {
+                            selectedDevice?.let { device ->
+                                scope.launch(Dispatchers.IO) {
+                                    statusMessage = "Disconnecting ${device.id}..."
+                                    if (adbRunner.disconnect(device.id)) {
+                                        statusMessage = "Disconnected ${device.id}"
+                                        selectedDevice = null
+                                    } else {
+                                        statusMessage = "Failed to disconnect"
+                                    }
+                                }
+                            }
+                        },
                         onOpenSettings = { showSettings = true },
-                        isEditEnabled = currentlyDisplayedFile != null
+                        isEditEnabled = currentlyDisplayedFile != null,
+                        isWirelessEnabled = selectedDevice != null && !selectedDevice!!.id.contains(":"),
+                        isDisconnectEnabled = selectedDevice != null && selectedDevice!!.id.contains(":")
                     )
 
                     Column(
@@ -521,8 +549,12 @@ fun Sidebar(
     onDeviceSelected: (DeviceInfo) -> Unit,
     onOpenGallery: () -> Unit,
     onEdit: () -> Unit,
+    onConnectWireless: () -> Unit,
+    onDisconnectWireless: () -> Unit,
     onOpenSettings: () -> Unit,
-    isEditEnabled: Boolean
+    isEditEnabled: Boolean,
+    isWirelessEnabled: Boolean,
+    isDisconnectEnabled: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -543,6 +575,7 @@ fun Sidebar(
         
         devices.forEach { device ->
             val isSelected = selectedDevice?.id == device.id
+            val isWireless = device.id.contains(":")
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -553,7 +586,7 @@ fun Sidebar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Rounded.PhoneAndroid,
+                    imageVector = if (isWireless) Icons.Rounded.Wifi else Icons.Rounded.Usb,
                     contentDescription = null,
                     tint = if (isSelected) Color(0xFFF7AF39) else Color.Gray,
                     modifier = Modifier.size(20.dp)
@@ -573,6 +606,51 @@ fun Sidebar(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        if (!isDisconnectEnabled) {
+            Button(
+                onClick = onConnectWireless,
+                enabled = isWirelessEnabled,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.1f),
+                    disabledContainerColor = Color.White.copy(alpha = 0.05f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.Wifi,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = if (isWirelessEnabled) Color.White else Color.Gray
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Wireless", fontSize = 14.sp, color = if (isWirelessEnabled) Color.White else Color.Gray)
+            }
+        }
+
+        if (isDisconnectEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onDisconnectWireless,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE57373).copy(alpha = 0.2f),
+                    contentColor = Color(0xFFE57373)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.WifiOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Disconnect", fontSize = 14.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onEdit,
