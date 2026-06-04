@@ -51,6 +51,11 @@ import javax.imageio.ImageIO
 import kotlin.system.exitProcess
 import org.jetbrains.skia.Image as SkiaImage
 
+/**
+ * windows
+ * .\gradlew.bat :app:packageDistributionForCurrentOS
+ * .\gradlew.bat :app:createDistributable
+ */
 fun main() = application {
     val settingsFile = File(System.getProperty("user.home"), ".mrsohn_capture_settings.properties")
     val settings = WindowSettings(settingsFile)

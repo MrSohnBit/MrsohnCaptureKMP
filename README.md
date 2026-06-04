@@ -81,7 +81,10 @@ Compose Desktop 설정을 통해 아래 형식의 네이티브 패키징을 지�
 ```
 
 ### 배포 패키지 생성
+
 ```bash
+./gradlew :app:createDistributable
+
 ./gradlew :app:packageDmg  # macOS
 ./gradlew :app:packageMsi  # Windows
 ./gradlew :app:packageDeb  # Linux
