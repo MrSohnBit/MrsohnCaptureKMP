@@ -25,7 +25,7 @@ jobs:
         shell: bash
 
       - name: Build Windows MSI
-        run: ./gradlew.bat :app:packageDistributionForCurrentOS
+        run: ./gradlew :app:packageDistributionForCurrentOS
 
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@1746f491d96030999532d8478426f8f537021e54
@@ -34,7 +34,7 @@ jobs:
           path: app/build/compose/binaries/main/msi/*.msi
 
       - name: Build Windows Distributable (Zip)
-        run: ./gradlew.bat :app:createDistributable
+        run: ./gradlew :app:createDistributable
 
       - name: Upload Distributable Artifact
         uses: actions/upload-artifact@1746f491d96030999532d8478426f8f537021e54
