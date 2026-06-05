@@ -32,13 +32,13 @@ jobs:
         with:
           name: MrSohnCapture-Windows-MSI
 #          path: app/build/compose/binaries/main/msi/*.msi
-          path: /*.msi
+          path: /MrSohnCapture.msi
 
-      - name: Build Windows Distributable (Zip)
-        run: ./gradlew :app:createDistributable
-
-      - name: Upload Distributable Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MrSohnCapture-Windows-Dist
-          path: /**/*
+#      - name: Build Windows Distributable (Zip)
+#        run: ./gradlew :app:createDistributable
+#
+#      - name: Upload Distributable Artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: MrSohnCapture-Windows-Dist
+#          path: /
