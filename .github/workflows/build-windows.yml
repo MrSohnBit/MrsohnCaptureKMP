@@ -28,7 +28,7 @@ jobs:
         run: ./gradlew :app:packageDistributionForCurrentOS
 
       - name: Upload MSI Artifact
-        uses: actions/upload-artifact@1746f491d96030999532d8478426f8f537021e54
+        uses: actions/upload-artifact@v4
         with:
           name: MrSohnCapture-Windows-MSI
           path: app/build/compose/binaries/main/msi/*.msi
@@ -37,7 +37,7 @@ jobs:
         run: ./gradlew :app:createDistributable
 
       - name: Upload Distributable Artifact
-        uses: actions/upload-artifact@1746f491d96030999532d8478426f8f537021e54
+        uses: actions/upload-artifact@v4
         with:
           name: MrSohnCapture-Windows-Dist
           path: app/build/compose/binaries/main/app/**/*
