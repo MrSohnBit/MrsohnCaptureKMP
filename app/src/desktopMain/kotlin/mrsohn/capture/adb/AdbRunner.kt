@@ -87,7 +87,7 @@ class AdbRunner(private val customAdbPath: String? = null) {
 
     fun captureScreen(deviceId: String?, targetFile: File): Boolean {
         return try {
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
             val tempDevicePath = "/sdcard/Download/mrsohn_capture_temp_${timestamp}.png"
             
             val capCmd = mutableListOf(adbPath)

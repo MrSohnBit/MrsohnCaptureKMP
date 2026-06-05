@@ -280,28 +280,45 @@ fun MrSohnCaptureApp(
     }
 
     val performCapture = {
-        if (selectedDevice != null) {
+        if (selectedDevice != null && !isCapturing) {
+            isCapturing = true
             scope.launch {
-                isCapturing = true
-                statusMessage = "Capturing ${selectedDevice?.model}..."
-                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                val file = File(saveDir, "capture_$timestamp.png")
+                try {
+                    statusMessage = "Capturing ${selectedDevice?.model}..."
+                    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
+                    val file = File(saveDir, "capture_$timestamp.png")
 
-                val success = withContext(Dispatchers.IO) {
-                    adbRunner.captureScreen(selectedDevice?.id, file)
-                }
+                    val success = withContext(Dispatchers.IO) {
+                        adbRunner.captureScreen(selectedDevice?.id, file)
+                    }
 
-                if (success) {
-                    refreshCapturedImages()
-                    val bytes = withContext(Dispatchers.IO) { file.readBytes() }
-                    currentImage = SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
-                    currentlyDisplayedFile = file
-                    statusMessage = "Saved to ${saveDir.name}"
-                    showFlash = true
-                } else {
-                    statusMessage = "Capture failed. Check ADB path."
+                    if (success && file.exists()) {
+                        val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+                        if (bytes.isNotEmpty()) {
+                            val skiaImage = try {
+                                SkiaImage.makeFromEncoded(bytes)
+                            } catch (e: Exception) {
+                                null
+                            }
+                            
+                            if (skiaImage != null) {
+                                currentImage = skiaImage.toComposeImageBitmap()
+                                currentlyDisplayedFile = file
+                                refreshCapturedImages()
+                                statusMessage = "Saved to ${saveDir.name}"
+                                showFlash = true
+                            } else {
+                                statusMessage = "Failed to decode image"
+                            }
+                        }
+                    } else {
+                        statusMessage = "Capture failed. Check ADB path."
+                    }
+                } catch (e: Exception) {
+                    statusMessage = "Error: ${e.message}"
+                } finally {
+                    isCapturing = false
                 }
-                isCapturing = false
             }
         }
         Unit
