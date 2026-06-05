@@ -10,11 +10,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # actions/checkout@v4.2.2
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      # actions/setup-java@v4.5.0
       - name: Set up JDK 17
         uses: actions/setup-java@7a6d8a8234af8eb26422e24e30256717cf8f83e7
         with:
@@ -30,7 +28,6 @@ jobs:
         run: ./gradlew.bat :app:packageDistributionForCurrentOS
 
       - name: Upload MSI Artifact
-        # actions/upload-artifact@v4.4.3
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
           name: MrSohnCapture-Windows-MSI
@@ -40,7 +37,6 @@ jobs:
         run: ./gradlew.bat :app:createDistributable
 
       - name: Upload Distributable Artifact
-        # actions/upload-artifact@v4.4.3
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
           name: MrSohnCapture-Windows-Dist
