@@ -119,6 +119,18 @@ fun MrSohnCaptureApp(
     var savePath by remember { mutableStateOf(initialSavePath) }
     
     val adbRunner = remember(adbPath) { AdbRunner(adbPath.takeIf { it.isNotBlank() }) }
+    var isAdbValid by remember { mutableStateOf(true) }
+
+    // 자동 ADB 경로 설정 및 저장
+    LaunchedEffect(Unit) {
+        if (adbPath.isBlank()) {
+            val autoPath = adbRunner.adbPath
+            if (File(autoPath).exists()) {
+                adbPath = autoPath
+                onSettingsChanged(autoPath, savePath)
+            }
+        }
+    }
 
     var devices by remember { mutableStateOf(listOf<DeviceInfo>()) }
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -355,12 +367,21 @@ fun MrSohnCaptureApp(
 
     LaunchedEffect(adbRunner) {
         while(true) {
-            val foundDevices = withContext(Dispatchers.IO) { adbRunner.getDevices() }
-            devices = foundDevices
-            if (selectedDevice == null && devices.isNotEmpty()) {
-                selectedDevice = devices.first()
-            } else if (selectedDevice != null && !devices.any { it.id == selectedDevice?.id }) {
-                selectedDevice = if (devices.isNotEmpty()) devices.first() else null
+            val available = withContext(Dispatchers.IO) { adbRunner.isAdbAvailable() }
+            isAdbValid = available
+            
+            if (available) {
+                val foundDevices = withContext(Dispatchers.IO) { adbRunner.getDevices() }
+                devices = foundDevices
+                if (selectedDevice == null && devices.isNotEmpty()) {
+                    selectedDevice = devices.first()
+                } else if (selectedDevice != null && !devices.any { it.id == selectedDevice?.id }) {
+                    selectedDevice = if (devices.isNotEmpty()) devices.first() else null
+                }
+            } else {
+                devices = emptyList()
+                selectedDevice = null
+                statusMessage = "ADB not found. Please check ADB path in Settings."
             }
             delay(5000)
         }
@@ -446,6 +467,7 @@ fun MrSohnCaptureApp(
                     Sidebar(
                         devices = devices,
                         selectedDevice = selectedDevice,
+                        isAdbValid = isAdbValid,
                         onDeviceSelected = { selectedDevice = it },
                         onOpenGallery = {
                             try {
@@ -546,6 +568,7 @@ fun MrSohnCaptureApp(
 fun Sidebar(
     devices: List<DeviceInfo>,
     selectedDevice: DeviceInfo?,
+    isAdbValid: Boolean,
     onDeviceSelected: (DeviceInfo) -> Unit,
     onOpenGallery: () -> Unit,
     onEdit: () -> Unit,
@@ -602,7 +625,12 @@ fun Sidebar(
         }
 
         if (devices.isEmpty()) {
-            Text("No devices found", color = Color.Gray, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 12.dp))
+            Text(
+                if (isAdbValid) "No devices found" else "ADB not found",
+                color = if (isAdbValid) Color.Gray else Color(0xFFE57373),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 12.dp)
+            )
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -710,6 +738,13 @@ fun SettingsDialog(
 ) {
     var adbPath by remember { mutableStateOf(initialAdbPath) }
     var savePath by remember { mutableStateOf(initialSavePath) }
+    
+    // 실시간 ADB 경로 유효성 체크
+    val isAdbPathValid by produceState(initialValue = true, adbPath) {
+        value = withContext(Dispatchers.IO) {
+            AdbRunner(adbPath.takeIf { it.isNotBlank() }).isAdbAvailable()
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -724,13 +759,23 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("e.g. /path/to/adb") },
                     singleLine = true,
+                    isError = !isAdbPathValid,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.White.copy(alpha = 0.05f),
                         unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
                         focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedTextColor = Color.White,
+                        errorContainerColor = Color(0xFFE57373).copy(alpha = 0.1f)
                     )
                 )
+                if (!isAdbPathValid) {
+                    Text(
+                        "ADB executable not found at this path",
+                        color = Color(0xFFE57373),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 

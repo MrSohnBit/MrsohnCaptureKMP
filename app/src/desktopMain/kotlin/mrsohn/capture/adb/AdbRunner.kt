@@ -9,29 +9,46 @@ import java.util.Locale
 
 class AdbRunner(private val customAdbPath: String? = null) {
 
-    private val adbPath: String by lazy {
-        if (!customAdbPath.isNullOrBlank() && File(customAdbPath).exists()) {
-            customAdbPath
-        } else {
-            findAdbPath()
+    private val adbExecutableName: String by lazy {
+        if (System.getProperty("os.name").lowercase().contains("win")) "adb.exe" else "adb"
+    }
+
+    val adbPath: String by lazy {
+        if (!customAdbPath.isNullOrBlank()) {
+            val file = File(customAdbPath)
+            val adbFile = if (file.isDirectory) {
+                File(file, adbExecutableName)
+            } else {
+                file
+            }
+            if (adbFile.exists()) {
+                return@lazy adbFile.absolutePath
+            }
         }
+        findAdbPath()
     }
 
     private fun findAdbPath(): String {
-        val sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
-        if (sdkRoot != null) {
-            val adb = File(sdkRoot, "platform-tools/adb")
-            if (adb.exists()) return adb.absolutePath
-        }
-
+        // 1. 기본 OS별 경로 확인
         val home = System.getProperty("user.home")
-        val macDefaultAdb = File(home, "Library/Android/sdk/platform-tools/adb")
+        val macDefaultAdb = File(home, "Library/Android/sdk/platform-tools/$adbExecutableName")
         if (macDefaultAdb.exists()) return macDefaultAdb.absolutePath
 
         val winDefaultAdb = File(System.getenv("LOCALAPPDATA") ?: "", "Android/Sdk/platform-tools/adb.exe")
         if (winDefaultAdb.exists()) return winDefaultAdb.absolutePath
 
-        return "adb"
+        // 2. 환경 변수 확인
+        val sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+        if (sdkRoot != null) {
+            val adb = File(sdkRoot, "platform-tools/$adbExecutableName")
+            if (adb.exists()) return adb.absolutePath
+        }
+
+        // 3. 현재 실행 폴더 내 platform-tools 확인
+        val localAdb = File("platform-tools/$adbExecutableName")
+        if (localAdb.exists()) return localAdb.absolutePath
+
+        return adbExecutableName
     }
 
     fun isAdbAvailable(): Boolean {
