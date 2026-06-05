@@ -3,6 +3,7 @@ name: Build Windows Release
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 jobs:
@@ -11,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@387ac29b308b003ca37ba93a6cab5eb57c8f5f93
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -27,17 +28,32 @@ jobs:
       - name: Build Windows MSI
         run: ./gradlew :app:packageDistributionForCurrentOS
 
+      - name: Build Windows Distributable
+        run: ./gradlew :app:createDistributable
+
+      - name: Zip Distributable (for Release)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "app/build/compose/binaries/main/app/*" -DestinationPath "MrSohnCapture-Windows.zip"
+
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MrSohnCapture-Windows-MSI
           path: app/build/compose/binaries/main/msi/*.msi
 
-      - name: Build Windows Distributable (Zip)
-        run: ./gradlew :app:createDistributable
-
-      - name: Upload Distributable Artifact
+      - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MrSohnCapture-Windows-Dist
-          path: app/build/compose/binaries/main/app/**/*
+          name: MrSohnCapture-Windows-Zip
+          path: MrSohnCapture-Windows.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            app/build/compose/binaries/main/msi/*.msi
+            MrSohnCapture-Windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
