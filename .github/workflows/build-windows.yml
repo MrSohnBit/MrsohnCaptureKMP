@@ -34,7 +34,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            app/build/compose/binaries/main/msi/*.msi
+            app/build/compose/binaries/**/*.msi
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
