@@ -35,6 +35,20 @@ compose.desktop {
             )
             packageName = "MrSohnCapture"
             packageVersion = "1.0.0"
+
+//            windows {
+//                iconFile.set(project.file("desktopApp.ico")) // 윈도우 전용 아이콘 경로
+//                menu = true
+//                shortcut = true
+//            }
+//
+//            macOS {
+//                iconFile.set(project.file("desktopApp.icns"))
+//            }
+//
+//            linux {
+//                iconFile.set(project.file("desktopApp.png"))
+//            }
         }
     }
 }
