@@ -63,18 +63,14 @@ jobs:
         shell: bash
 
       - name: Build Windows MSI
-        run: ./gradlew :app:packageDistributionForCurrentOS
-
-      - name: Build Windows Distributable
-#        run: ./gradlew :app:createDistributable
         run: ./gradlew :app:packageMsi
 
       - name: Create GitHub Release and Upload MSI
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          # 패키징 결과물 위치 (일반적으로 build/compose/binaries/main/msi/ 폴더 아래에 생성됨)
           files: |
-            **/build/compose/binaries/main/msi/*.msi
+            app/build/compose/binaries/main/msi/*.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
