@@ -8,7 +8,17 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            task: packageMsi
+            artifact: "**/*.msi"
+          - os: macos-latest
+            task: packageDmg
+            artifact: "**/*.dmg"
+
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
 
@@ -20,7 +30,6 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: '17'
-#          distribution: 'temurin'
           distribution: 'zulu'
           cache: gradle
 
@@ -28,19 +37,18 @@ jobs:
         run: git update-index --chmod=+x gradlew
         shell: bash
 
-      - name: Build Windows MSI
-        run: ./gradlew :app:packageMsi
+      - name: Build Desktop Application
+        run: ./gradlew :desktopApp:${{ matrix.task }}
 
-      - name: Create GitHub Release and Upload MSI
+      - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            app/build/compose/binaries/**/*.msi
+            desktopApp/build/compose/binaries/${{ matrix.artifact }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
 
 #jobs:

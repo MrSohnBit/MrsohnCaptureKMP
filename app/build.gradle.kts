@@ -34,8 +34,18 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "MrSohnCapture"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.6"
 
+            windows {
+                shortcut = true // 윈도우 시작 메뉴 바로가기 자동 생성
+                menu = true
+//                iconFile.set(project.file("icons/app_icon.ico")) // 윈도우용 아이콘
+//                iconFile.set(project.file("src/main/resources/icon.ico"))
+            }
+            macOS {
+                dockName = "MrSohnCapture"
+//                iconFile.set(project.file("icons/app_icon.icns")) // Mac용 아이콘
+            }
 //            windows {
 //                iconFile.set(project.file("desktopApp.ico")) // 윈도우 전용 아이콘 경로
 //                menu = true
