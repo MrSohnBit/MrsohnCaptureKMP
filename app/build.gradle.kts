@@ -34,7 +34,7 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "MrSohnCapture"
-            packageVersion = "1.0.6"
+            packageVersion = "1.0.7"
 
             windows {
                 shortcut = true // 윈도우 시작 메뉴 바로가기 자동 생성
