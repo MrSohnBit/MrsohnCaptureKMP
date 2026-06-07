@@ -36,29 +36,21 @@ compose.desktop {
             packageName = "MrSohnCapture"
             packageVersion = "1.0.7"
 
+            // 외부 파일(sdk 등)을 패키지에 포함시키기 위한 설정
+            appResourcesRootDir.set(project.file("../sdk/windows/platform-tools/"))
+
             windows {
-                shortcut = true // 윈도우 시작 메뉴 바로가기 자동 생성
+                shortcut = true
                 menu = true
-//                iconFile.set(project.file("icons/app_icon.ico")) // 윈도우용 아이콘
-//                iconFile.set(project.file("src/main/resources/icon.ico"))
+//                iconFile.set(project.file("desktopApp.ico"))
             }
             macOS {
                 dockName = "MrSohnCapture"
-//                iconFile.set(project.file("icons/app_icon.icns")) // Mac용 아이콘
-            }
-//            windows {
-//                iconFile.set(project.file("desktopApp.ico")) // 윈도우 전용 아이콘 경로
-//                menu = true
-//                shortcut = true
-//            }
-//
-//            macOS {
 //                iconFile.set(project.file("desktopApp.icns"))
-//            }
-//
-//            linux {
+            }
+            linux {
 //                iconFile.set(project.file("desktopApp.png"))
-//            }
+            }
         }
     }
 }
