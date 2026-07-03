@@ -3,18 +3,61 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.rounded.ArrowCircleRight
+import androidx.compose.material.icons.rounded.Collections
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Screenshot
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Usb
+import androidx.compose.material.icons.rounded.UsbOff
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
@@ -22,7 +65,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,7 +99,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.imageio.ImageIO
-import kotlin.system.exitProcess
 import org.jetbrains.skia.Image as SkiaImage
 
 /**
@@ -69,6 +119,7 @@ fun main() = application {
     // 가변적인 설정을 관리하기 위한 State (저장 경로 및 ADB 경로)
     var currentAdbPath by mutableStateOf(savedState.adbPath)
     var currentSavePath by mutableStateOf(savedState.savePath)
+    var isSidebarExpanded by mutableStateOf(savedState.isSidebarExpanded)
 
     val saveAndExit = {
         try {
@@ -80,7 +131,8 @@ fun main() = application {
                 x,
                 y,
                 currentAdbPath,
-                currentSavePath
+                currentSavePath,
+                isSidebarExpanded
             )
         } catch (e: Exception) {
             e.printStackTrace()
@@ -96,10 +148,12 @@ fun main() = application {
         MrSohnCaptureApp(
             initialAdbPath = currentAdbPath,
             initialSavePath = currentSavePath,
+            initialSidebarExpanded = isSidebarExpanded,
             onSettingsChanged = { adb, save ->
                 currentAdbPath = adb
                 currentSavePath = save
             },
+            onSidebarExpandedChanged = { isSidebarExpanded = it },
             onExit = saveAndExit
         )
     }
@@ -109,7 +163,9 @@ fun main() = application {
 fun MrSohnCaptureApp(
     initialAdbPath: String,
     initialSavePath: String,
+    initialSidebarExpanded: Boolean,
     onSettingsChanged: (String, String) -> Unit,
+    onSidebarExpandedChanged: (Boolean) -> Unit,
     onExit: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -140,6 +196,7 @@ fun MrSohnCaptureApp(
     var isCapturing by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Ready") }
     var showFlash by remember { mutableStateOf(false) }
+    var isSidebarExpanded by remember { mutableStateOf(initialSidebarExpanded) }
 
     val currentImageFile: File? = currentlyDisplayedFile.takeIf { it != null }
 
@@ -178,7 +235,7 @@ fun MrSohnCaptureApp(
                 if (skiaImage != null) {
                     currentImage = skiaImage.toComposeImageBitmap()
                     currentlyDisplayedFile = file
-                    statusMessage = "Viewing: ${file.name}"
+                    statusMessage = "${file.name}"
                 } else {
                     statusMessage = "Failed to decode image"
                 }
@@ -205,7 +262,7 @@ fun MrSohnCaptureApp(
                     currentImage = skiaImage.toComposeImageBitmap()
                     currentlyDisplayedFile = file
                     if (!preserveStatusMessage) {
-                        statusMessage = "Viewing: ${file.name}"
+                        statusMessage = "${file.name}"
                     }
                 } else {
                     statusMessage = "Failed to decode image"
@@ -482,6 +539,12 @@ fun MrSohnCaptureApp(
             ) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     Sidebar(
+                        isExpanded = isSidebarExpanded,
+                        onToggle = { 
+                            isSidebarExpanded = !isSidebarExpanded
+                            onSidebarExpandedChanged(isSidebarExpanded)
+                        },
+                        onShowManual = { showShortcutHelp = true },
                         devices = devices,
                         selectedDevice = selectedDevice,
                         isAdbValid = isAdbValid,
@@ -551,8 +614,7 @@ fun MrSohnCaptureApp(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         HeaderArea(
-                            status = statusMessage,
-                            onShowShortcutHelp = { showShortcutHelp = true }
+                            status = statusMessage
                         )
                         Spacer(modifier = Modifier.height(24.dp))
 
@@ -602,6 +664,9 @@ fun MrSohnCaptureApp(
 
 @Composable
 fun Sidebar(
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onShowManual: () -> Unit,
     devices: List<DeviceInfo>,
     selectedDevice: DeviceInfo?,
     isAdbValid: Boolean,
@@ -617,17 +682,54 @@ fun Sidebar(
 ) {
     Column(
         modifier = Modifier
-            .width(260.dp)
+            .width(if (isExpanded) 260.dp else 80.dp)
             .fillMaxHeight()
             .padding(16.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .padding(16.dp)
+            .padding(if (isExpanded) 16.dp else 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Top Bar in Sidebar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+//            horizontalArrangement = if (isExpanded) Arrangement.SpaceBetween else Arrangement.Center
+        ) {
+
+            IconButton(onClick = onToggle) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowCircleRight,
+                    contentDescription = "Toggle Sidebar",
+                    tint = Color.White,
+                    modifier = Modifier.rotate(if (isExpanded) -180f else 0f)
+                )
+            }
+
+            if (isExpanded) {
+                Text(
+                    "MrSohn Capture",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (isExpanded) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.Smartphone, contentDescription = null, tint = Color.White)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Devices", style = MaterialTheme.typography.titleSmall, color = Color.White)
+            }
+        } else {
             Icon(Icons.Rounded.Smartphone, contentDescription = null, tint = Color.White)
-            Spacer(modifier = Modifier.width(12.dp))
-            Text("Devices", style = MaterialTheme.typography.titleMedium, color = Color.White)
         }
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -641,8 +743,9 @@ fun Sidebar(
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (isSelected) Color.White.copy(alpha = 0.1f) else Color.Transparent)
                     .clickable { onDeviceSelected(device) }
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(if (isExpanded) 12.dp else 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (isExpanded) Arrangement.Start else Arrangement.Center
             ) {
                 Icon(
                     imageVector = if (isWireless) Icons.Rounded.Wifi else Icons.Rounded.Usb,
@@ -650,17 +753,19 @@ fun Sidebar(
                     tint = if (isSelected) Color(0xFFF7AF39) else Color.Gray,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    device.model,
-                    color = if (isSelected) Color.White else Color.Gray,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1
-                )
+                if (isExpanded) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        device.model,
+                        color = if (isSelected) Color.White else Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1
+                    )
+                }
             }
         }
 
-        if (devices.isEmpty()) {
+        if (devices.isEmpty() && isExpanded) {
             Text(
                 if (isAdbValid) "No devices found" else "ADB not found",
                 color = if (isAdbValid) Color.Gray else Color(0xFFE57373),
@@ -671,97 +776,121 @@ fun Sidebar(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        SidebarButton(
+            onClick = onShowManual,
+            enabled = true,
+            isExpanded = isExpanded,
+            icon = Icons.Rounded.HelpOutline,
+            label = "Manual"
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         if (!isDisconnectEnabled) {
-            Button(
+            SidebarButton(
                 onClick = onConnectWireless,
                 enabled = isWirelessEnabled,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.1f),
-                    disabledContainerColor = Color.White.copy(alpha = 0.05f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.Wifi,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = if (isWirelessEnabled) Color.White else Color.Gray
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Wireless", fontSize = 14.sp, color = if (isWirelessEnabled) Color.White else Color.Gray)
-            }
+                isExpanded = isExpanded,
+                icon = Icons.Rounded.Wifi,
+                label = "Wireless",
+                tint = if (isWirelessEnabled) Color.White else Color.Gray
+            )
         }
 
         if (isDisconnectEnabled) {
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
+            SidebarButton(
                 onClick = onDisconnectWireless,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE57373).copy(alpha = 0.2f),
-                    contentColor = Color(0xFFE57373)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.WifiOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Disconnect", fontSize = 14.sp)
-            }
+                enabled = true,
+                isExpanded = isExpanded,
+                icon = Icons.Rounded.WifiOff,
+                label = "Disconnect",
+                containerColor = Color(0xFFE57373).copy(alpha = 0.2f),
+                contentColor = Color(0xFFE57373)
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Button(
+        SidebarButton(
             onClick = onEdit,
             enabled = isEditEnabled,
+            isExpanded = isExpanded,
+            icon = Icons.Rounded.Edit,
+            label = "Edit",
+            tint = if (isEditEnabled) Color.White else Color.Gray
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SidebarButton(
+            onClick = onOpenGallery,
+            enabled = true,
+            isExpanded = isExpanded,
+            icon = Icons.Rounded.Collections,
+            label = "Gallery"
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SidebarButton(
+            onClick = onOpenSettings,
+            enabled = true,
+            isExpanded = isExpanded,
+            icon = Icons.Rounded.Settings,
+            label = "Settings"
+        )
+    }
+}
+
+@Composable
+fun SidebarButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    isExpanded: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color = Color.White,
+    containerColor: Color = Color.White.copy(alpha = 0.1f),
+    contentColor: Color = Color.White
+) {
+    if (isExpanded) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White.copy(alpha = 0.1f),
+                containerColor = containerColor,
+                contentColor = contentColor,
                 disabledContainerColor = Color.White.copy(alpha = 0.05f)
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
             Icon(
-                Icons.Rounded.Edit, 
-                contentDescription = null, 
+                icon,
+                contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = if (isEditEnabled) Color.White else Color.Gray
+                tint = if (enabled) tint else Color.Gray
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Edit", fontSize = 14.sp, color = if (isEditEnabled) Color.White else Color.Gray)
+            Text(label, fontSize = 14.sp, color = if (enabled) contentColor else Color.Gray)
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        
-
-        Button(
-            onClick = onOpenGallery,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-            shape = RoundedCornerShape(12.dp)
+    } else {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (enabled) containerColor else Color.White.copy(alpha = 0.05f))
         ) {
-            Icon(Icons.Rounded.Collections, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Gallery", fontSize = 14.sp, color = Color.White)
+            Icon(
+                icon,
+                contentDescription = label,
+                modifier = Modifier.size(20.dp),
+                tint = if (enabled) tint else Color.Gray
+            )
         }
-
-        Button(
-            onClick = onOpenSettings,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Settings", fontSize = 14.sp, color = Color.White)
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
@@ -849,8 +978,7 @@ fun SettingsDialog(
 
 @Composable
 fun HeaderArea(
-    status: String,
-    onShowShortcutHelp: () -> Unit
+    status: String
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -861,25 +989,6 @@ fun HeaderArea(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "MrSohn Capture",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onShowShortcutHelp) {
-                    Icon(
-                        imageVector = Icons.Rounded.HelpOutline,
-                        contentDescription = "단축키 도움말 보기",
-                        tint = Color.White.copy(alpha = 0.85f)
-                    )
-                }
-            }
             Text(
                 status,
                 color = Color.Gray,

@@ -31,11 +31,12 @@ class WindowSettings(private val file: File, val defaultSize: DpSize = DpSize(80
         // 새 설정 항목 추가
         val adbPath = props.getProperty("adbPath", "")
         val savePath = props.getProperty("savePath", "")
+        val isSidebarExpanded = props.getProperty("isSidebarExpanded", "true").toBoolean()
 
-        return WindowStateData(DpSize(width.dp, height.dp), position, adbPath, savePath)
+        return WindowStateData(DpSize(width.dp, height.dp), position, adbPath, savePath, isSidebarExpanded)
     }
 
-    fun save(width: Int, height: Int, x: Int, y: Int, adbPath: String, savePath: String) {
+    fun save(width: Int, height: Int, x: Int, y: Int, adbPath: String, savePath: String, isSidebarExpanded: Boolean) {
         val props = Properties()
         props.setProperty("width", width.toString())
         props.setProperty("height", height.toString())
@@ -43,6 +44,7 @@ class WindowSettings(private val file: File, val defaultSize: DpSize = DpSize(80
         props.setProperty("y", y.toString())
         props.setProperty("adbPath", adbPath)
         props.setProperty("savePath", savePath)
+        props.setProperty("isSidebarExpanded", isSidebarExpanded.toString())
         try {
             FileOutputStream(file).use { props.store(it, "Window Settings") }
         } catch (e: Exception) { e.printStackTrace() }
@@ -64,5 +66,6 @@ data class WindowStateData(
     val size: DpSize, 
     val position: WindowPosition,
     val adbPath: String,
-    val savePath: String
+    val savePath: String,
+    val isSidebarExpanded: Boolean
 )
