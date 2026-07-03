@@ -34,7 +34,7 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "MrSohnCapture"
-            packageVersion = "1.0.8"
+            packageVersion = "1.0.9"
 
             windows {
                 shortcut = true
