@@ -487,9 +487,28 @@ fun MrSohnCaptureApp(
                         isAdbValid = isAdbValid,
                         onDeviceSelected = { selectedDevice = it },
                         onOpenGallery = {
+                            val fileToSelect = currentlyDisplayedFile
                             try {
-                                java.awt.Desktop.getDesktop().open(saveDir)
-                            } catch (e: Exception) { e.printStackTrace() }
+                                val os = System.getProperty("os.name").lowercase()
+                                if (fileToSelect != null && fileToSelect.exists()) {
+                                    if (os.contains("win")) {
+                                        ProcessBuilder("explorer.exe", "/select,${fileToSelect.absolutePath}").start()
+                                    } else if (os.contains("mac")) {
+                                        ProcessBuilder("open", "-R", fileToSelect.absolutePath).start()
+                                    } else {
+                                        java.awt.Desktop.getDesktop().open(saveDir)
+                                    }
+                                } else {
+                                    java.awt.Desktop.getDesktop().open(saveDir)
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                try {
+                                    java.awt.Desktop.getDesktop().open(saveDir)
+                                } catch (e2: Exception) {
+                                    e2.printStackTrace()
+                                }
+                            }
                         },
                         onEdit = onEdit,
                         onConnectWireless = {

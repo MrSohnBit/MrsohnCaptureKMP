@@ -3,9 +3,11 @@ package mrsohn.capture.adb
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipFile
 
 class AdbRunner(private val customAdbPath: String? = null) {
 
@@ -48,7 +50,76 @@ class AdbRunner(private val customAdbPath: String? = null) {
         val localAdb = File("platform-tools/$adbExecutableName")
         if (localAdb.exists()) return localAdb.absolutePath
 
+        // 4. 내장 ZIP 파일에서 압축 해제 시도
+        val extractedAdb = extractAdbFromZip()
+        if (extractedAdb != null) return extractedAdb
+
         return adbExecutableName
+    }
+
+    private fun extractAdbFromZip(): String? {
+        val os = System.getProperty("os.name").lowercase()
+        val osSubDir = if (os.contains("win")) "windows" else "macos"
+        val zipName = if (os.contains("win")) "platform-tools-win.zip" else "platform-tools-mac.zip"
+
+        // Compose Desktop에서 리소스 디렉토리 찾기
+        val resDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+            ?: File("../sdk/$osSubDir") // 개발 환경용 경로
+        
+        val zipFile = File(resDir, zipName)
+        if (!zipFile.exists()) {
+            // 다른 개발 환경용 경로 시도 (프로젝트 루트 기준)
+            val devZipFile = File("sdk/$osSubDir", zipName)
+            if (!devZipFile.exists()) return null
+            else return extractZip(devZipFile)
+        }
+
+        return extractZip(zipFile)
+    }
+
+    private fun extractZip(zipFile: File): String? {
+        val os = System.getProperty("os.name").lowercase()
+        val extractDir = getExtractDir()
+        if (!extractDir.exists()) extractDir.mkdirs()
+
+        val adbFile = File(extractDir, "platform-tools/$adbExecutableName")
+        // 이미 압축 해제되어 있다면 해당 경로 반환
+        if (adbFile.exists()) return adbFile.absolutePath
+
+        try {
+            ZipFile(zipFile).use { zip ->
+                zip.entries().asSequence().forEach { entry ->
+                    val outFile = File(extractDir, entry.name)
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile.mkdirs()
+                        zip.getInputStream(entry).use { input ->
+                            FileOutputStream(outFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        // 실행 권한 설정 (Windows 제외)
+                        if (!os.contains("win")) {
+                            outFile.setExecutable(true)
+                        }
+                    }
+                }
+            }
+            if (adbFile.exists()) return adbFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
+    }
+
+    private fun getExtractDir(): File {
+        val os = System.getProperty("os.name").lowercase()
+        return if (os.contains("win")) {
+            File(System.getenv("LOCALAPPDATA") ?: System.getProperty("user.home"), "MrSohnCapture/adb")
+        } else {
+            File(System.getProperty("user.home"), "Library/Application Support/MrSohnCapture/adb")
+        }
     }
 
     fun isAdbAvailable(): Boolean {

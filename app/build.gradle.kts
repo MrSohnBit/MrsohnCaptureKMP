@@ -34,18 +34,17 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "MrSohnCapture"
-            packageVersion = "1.0.7"
-
-            // 외부 파일(sdk 등)을 패키지에 포함시키기 위한 설정
-            appResourcesRootDir.set(project.file("../sdk/windows/platform-tools/"))
+            packageVersion = "1.0.8"
 
             windows {
                 shortcut = true
                 menu = true
+                appResourcesRootDir.set(project.file("../sdk/windows"))
 //                iconFile.set(project.file("desktopApp.ico"))
             }
             macOS {
                 dockName = "MrSohnCapture"
+                appResourcesRootDir.set(project.file("../sdk/macos"))
 //                iconFile.set(project.file("desktopApp.icns"))
             }
             linux {
