@@ -613,13 +613,10 @@ fun MrSohnCaptureApp(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .padding(24.dp),
+                            .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        HeaderArea(
-                            status = statusMessage
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
+
 
                         Box(
                             modifier = Modifier
@@ -651,8 +648,11 @@ fun MrSohnCaptureApp(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(32.dp))
-
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HeaderArea(
+                            status = statusMessage
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         BottomControls(
                             currentImageFile = currentImageFile,
                             capturedImages = capturedImages,
