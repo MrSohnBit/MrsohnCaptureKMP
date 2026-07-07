@@ -75,6 +75,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -99,6 +100,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.imageio.ImageIO
+import kotlin.time.Duration.Companion.milliseconds
 import org.jetbrains.skia.Image as SkiaImage
 
 /**
@@ -143,7 +145,8 @@ fun main() = application {
     Window(
         onCloseRequest = saveAndExit,
         title = "MrSohn Capture",
-        state = windowState
+        state = windowState,
+        icon = painterResource("icon.png")
     ) {
         MrSohnCaptureApp(
             initialAdbPath = currentAdbPath,
@@ -642,7 +645,7 @@ fun MrSohnCaptureApp(
                             if (showFlash) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.8f)))
                                 LaunchedEffect(Unit) {
-                                    delay(100)
+                                    delay(100.milliseconds)
                                     showFlash = false
                                 }
                             }

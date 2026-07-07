@@ -34,18 +34,17 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "MrSohnCapture"
-            packageVersion = "1.0.9"
+            packageVersion = "1.0.11"
 
             windows {
                 shortcut = true
                 menu = true
-                appResourcesRootDir.set(project.file("../sdk/windows"))
-//                iconFile.set(project.file("desktopApp.ico"))
+                iconFile.set(project.file("src/desktopMain/resources/icon.ico"))
             }
             macOS {
                 dockName = "MrSohnCapture"
                 appResourcesRootDir.set(project.file("../sdk/macos"))
-//                iconFile.set(project.file("desktopApp.icns"))
+                iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
             }
             linux {
 //                iconFile.set(project.file("desktopApp.png"))
