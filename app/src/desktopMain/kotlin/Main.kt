@@ -365,7 +365,7 @@ fun MrSohnCaptureApp(
                                 currentImage = skiaImage.toComposeImageBitmap()
                                 currentlyDisplayedFile = file
                                 refreshCapturedImages()
-                                statusMessage = "Saved to ${saveDir.name}"
+                                statusMessage = file.name
                                 showFlash = true
                             } else {
                                 statusMessage = "Failed to decode image"
@@ -438,7 +438,7 @@ fun MrSohnCaptureApp(
                 refreshCapturedImages()
                 reloadCurrentFile()
             }
-            delay(1000)
+            delay(1000.milliseconds)
         }
     }
 
@@ -460,7 +460,7 @@ fun MrSohnCaptureApp(
                 selectedDevice = null
                 statusMessage = "ADB not found. Please check ADB path in Settings."
             }
-            delay(5000)
+            delay(5000.milliseconds)
         }
     }
 
